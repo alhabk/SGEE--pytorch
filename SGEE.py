@@ -73,18 +73,18 @@ def normal_R_V(R_, current_Q, reward):
 def fill_g(R_, value, storage_g, storage, real_lenth):
     for i in range(0, len(R_))[::-1]:
         if R_[i] >= value:
-            storage_g[args.ptr] = storage[-(i+1)]  # R_和storage的顺序是颠倒的，长度相等
+            storage_g[args.ptr] = storage[-(i+1)] 
             args.ptr = (args.ptr + 1) % real_lenth
     return storage_g
 
 class Replay_buffer():
 
     def __init__(self, max_size=args.capacity):
-        self.storage = []  # Buffer是个多维列表
+        self.storage = []  
         self.storage_g = []
         self.max_size = max_size
 
-    def push(self, data):  # 将data顺序存储进buffer
+    def push(self, data):  
         self.storage.append(data)
 
     def sample(self, batch_size):
@@ -105,7 +105,7 @@ class Actor(nn.Module):
 
         self.l1 = nn.Linear(state_dim, 400)
         self.l2 = nn.Linear(400, 300)
-        self.l3 = nn.Linear(300, action_dim)  # 输出的是一些列action
+        self.l3 = nn.Linear(300, action_dim)  
 
         self.max_action = max_action
 
@@ -156,8 +156,6 @@ class DDPG(object):
         return self.actor(state).cpu().data.numpy().flatten()
 
     def update(self):
-        # on policy update
-        # 计算每个state的discount reward，并添加进data[4]
         dis_r = 0
         x_, y_, u_, r_, d_, R_ = [], [], [], [], [], []
         for i in range(0, len(self.replay_buffer.storage))[::-1]:
@@ -170,7 +168,7 @@ class DDPG(object):
             r_.append(r)
             d_.append(d)
 
-        #  在线更新
+        
         x_, y_, u_, r_, d_ = np.array(x_), np.array(y_), np.array(u_), np.array(r_).reshape(-1, 1), \
                              np.array(d_).reshape(-1, 1)
         state = torch.FloatTensor(x_).to(device)
@@ -185,7 +183,7 @@ class DDPG(object):
 
         critic_loss = F.mse_loss(current_Q, target)
         self.critic_optimizer.zero_grad()
-        critic_loss.backward()  # 反向传播
+        critic_loss.backward()  
         self.critic_optimizer.step()
 
         actor_loss = -self.critic(state, self.actor(state)).mean()
@@ -206,7 +204,7 @@ class DDPG(object):
             R_, value = normal_R_V(R_, current_Q, reward)
             self.replay_buffer.storage_g = fill_g(R_, value, self.replay_buffer.storage_g, self.replay_buffer.storage, args.real_lenth)
 
-        for it in range(args.update_iteration):  # 总循环数200
+        for it in range(args.update_iteration): 
             x, y, u, r, d = self.replay_buffer.sample(args.batch_size)
             state = torch.FloatTensor(x).to(device)
             action = torch.FloatTensor(u).to(device)
@@ -214,35 +212,32 @@ class DDPG(object):
             done = torch.FloatTensor(1 - d).to(device)
             reward = torch.FloatTensor(r).to(device)
 
-            # 计算目标Q值
+            
             target_Q = self.critic_target(next_state, self.actor_target(next_state))
 
-            target = reward + (done * args.gamma * target_Q).detach()  # 这里就是TD目标
+            target = reward + (done * args.gamma * target_Q).detach() 
 
-            # Get current Q estimate
+            
             current_Q = self.critic(state, action)
-            # Compute critic loss
             critic_loss = F.mse_loss(current_Q, target)
             self.writer.add_scalar('Loss/critic_loss', critic_loss, global_step=self.num_critic_update_iteration)
             self.critic_optimizer.zero_grad()
             critic_loss.backward()
             self.critic_optimizer.step()
 
-            # Compute actor loss
             actor_loss = -self.critic(state, self.actor(state)).mean()
             self.writer.add_scalar('Loss/actor_loss', actor_loss, global_step=self.num_actor_update_iteration)
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
             self.actor_optimizer.step()
 
-            # 软更新
+            
             for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
                 target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-
-            # actor和critic的更新次数
+                
             self.num_actor_update_iteration += 1
             self.num_critic_update_iteration += 1
 
@@ -262,7 +257,7 @@ class DDPG(object):
 
 def main():
     agent = DDPG(state_dim, action_dim, max_action)
-    ep_r = 0  # 回合奖励
+    ep_r = 0 
     if args.mode == 'test':
         agent.load()
         for i in range(args.test_iteration):
@@ -272,7 +267,7 @@ def main():
                 next_state, reward, done, info = env.step(np.float32(action))
                 ep_r += reward
                 env.render()
-                if done or t >= args.max_length_of_trajectory:  # 学习完一整个序列
+                if done or t >= args.max_length_of_trajectory:
                     print("Ep_i \t{}, the ep_r is \t{:0.2f}, the step is \t{}".format(i, ep_r, t))
                     ep_r = 0
                     break
@@ -293,7 +288,7 @@ def main():
             for t in count():
                 action = agent.select_action(state)
                 action = (action + np.random.normal(0, args.exploration_noise, size=env.action_space.shape[0])).clip(
-                    env.action_space.low, env.action_space.high)  # shape[0]返回行数，也就是actions的个数
+                    env.action_space.low, env.action_space.high)
                 next_state, reward, done, info = env.step(action)
                 #env.render()
                 agent.replay_buffer.push((state, next_state, action, reward, np.float(done)))
